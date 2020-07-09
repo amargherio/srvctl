@@ -1,0 +1,16 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: srvresolvers.apis.tsp.tc
+spec:
+  group: apis.tsp.tc
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+  scope: Namespaced
+  names:
+    plural: srvresolvers
+    singular: srvresolver
+    kind: SRVResolver
+

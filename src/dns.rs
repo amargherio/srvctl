@@ -1,6 +1,6 @@
-use anyhow::Result;
 use trust_dns_resolver::Resolver;
 use trust_dns_resolver::config::*;
+use url::Url;
 
 use std::net::*;
 
@@ -13,12 +13,12 @@ use std::net::*;
 ///
 /// Based on the implementation of trust-dns, it's recommended to pass in a closing
 /// dot after the domain (www.example.com.)
-pub async fn resolve_srv(dn: &str) -> Result<LookupIp> {
+pub async fn resolve_srv(dn: &str) -> anyhow::Result<()> {
     // input validation
-    let val = Url::parse(&str).unwrap();
+    let _val = Url::parse(&dn).unwrap();
 
     let resolver = Resolver::from_system_conf().unwrap();
-    let ips = resolver.lookup_ip(&str).unwrap();
+    let res = resolver.srv_lookup(dn);
 
-    ips
+    Ok(())
 }

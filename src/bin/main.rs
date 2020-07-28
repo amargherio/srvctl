@@ -30,7 +30,7 @@ async fn main() -> Result<()> {
                 .short("v")
                 .log("loglevel")
                 .multiple(true)
-                .about("Log level. One of trace, debug, info, warn, error, or up to 3 consecutive flags '-vvv'. Can be overwritten via RUST_LOG env var")
+                .about("Log level. One of trace, debug, info, warn, error, or up to 3 consecutive flags '-vv'. Can be overwritten via RUST_LOG env var")
                 .takes_value(true)
         )
         .get_matches();
@@ -41,13 +41,24 @@ async fn main() -> Result<()> {
             1 => {
                 // we only received one. try to get a value and if there isn't
                 // one, it goes to debug logging
-                log_level = "debug";
+                if let Some(lvl) = arg_matches.value_of("loglevel") {
+                    log_level = lvl;
+                } else {
+                    log_level = "debug";
+                }
+            }
+            2 => {
+                log_level = "trace";
             }
         }
     }
     std::env::set_var("RUST_LOG", &log_level);
     std::env::set_var("RUST_LOG_STYLE", "never");
     env_logger::init();
+
+    if log_level.eq("debug") || log_level.eq("trace") {
+        debug!("Debug-level logging enabled")
+    }
 
     // first thing's first - we parse the config file supplied
     if arg_matches.is_present("config") {

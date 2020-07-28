@@ -1,1 +1,1 @@
-pub mod resolv;
+pub mod dns;

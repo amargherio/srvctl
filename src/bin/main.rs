@@ -1,13 +1,13 @@
 use anyhow::Result;
-use clap::{Clap, App, Arg, ArgMatches};
-use log::{trace, debug, info, warn, error};
+use clap::{App, Arg, ArgMatches, Clap};
+use log::{debug, error, info, trace, warn};
 
 use crate::dns::resolve_srv;
 
 #[derive(Debug, Deserialize, Display)]
 struct ControllerConfig {
     domains: Vec<String>,
-    #[serde(alias="createService")]
+    #[serde(alias = "createService")]
     create_service: bool,
 }
 
@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
                 // we only received one. try to get a value and if there isn't
                 // one, it goes to debug logging
                 log_level = "debug";
-            },
+            }
         }
     }
     std::env::set_var("RUST_LOG", &log_level);
@@ -54,7 +54,9 @@ async fn main() -> Result<()> {
         if let Some(conf) = arg_matches.value_of_os("config") {
             loaded_config = parse_load_config(&conf)?;
         } else {
-            Err(anyhow::Error::msg("No configuration file provided, no domains to monitor"))
+            Err(anyhow::Error::msg(
+                "No configuration file provided, no domains to monitor",
+            ))
         }
     }
 
@@ -66,27 +68,58 @@ async fn main() -> Result<()> {
     }
 }
 
+/// Handles the loading and parsing of the config file supplied as a CLI arg.
+///
+/// In order, it determines if the file path exists, extracts the extension,
+/// and (for a supported file extension) attemptes to parse the file.
+///
+/// Returns either the error returned by the parser or a ControllerConfig struct.
 fn parse_load_config(file_path: &str) -> anyhow::Result<ControllerConfig> {
     let fpath = Path::new(&file_path);
     if fpath.exists() {
+        debug!(
+            "Configuration file at path {} exists, loading file.",
+            file_path
+        );
+
         let f = File::open(fpath);
         let buf = BufReader::new(f);
         let file_contents = String::new();
         buf.read_to_string(&mut file_contents)?;
 
+        debug!("Successfully loaded config file into string.");
+
+        if len(file_contents) == 0 {
+            error!("Provided config file is empty, unable to continue parsing.");
+            Err(anyhow::Error::msg(
+                "The supplied configuration file is empty",
+            ))
+        }
+
         match fpath.extension() {
             "toml" => {
+                debug!("Config file has extension of 'toml', loading via TOML parser");
                 loaded_config = toml::from_str(file_contents);
                 Ok(loaded_config)
-            },
+            }
             "yaml" => {
+                debug!("Config file has extension of 'yaml', loading via YAML parser");
                 loaded_config = serde_yaml::from_str(&file_contents)?;
                 Ok(loaded_config)
-            },
-            Some(ext) => Err(anyhow::Error::msg(format!("Unsupported configuration format '{}'", &ext))),
-            _ => Err(anyhow::Error::msg("Error encountered while trying to discover config file format")),
+            }
+            Some(ext) => Err(anyhow::Error::msg(format!(
+                "Unsupported configuration format '{}'",
+                &ext
+            ))),
+            _ => Err(anyhow::Error::msg(
+                "Error encountered while trying to discover config file format",
+            )),
         }
     } else {
-        Err(anyhow::Error::msg(format!("Config file does not exist at {}", &file_path)))
+        error!("Supplied configuration file does not exist, cannot start the controller.");
+        Err(anyhow::Error::msg(format!(
+            "Config file does not exist at {}",
+            &file_path
+        )))
     }
 }

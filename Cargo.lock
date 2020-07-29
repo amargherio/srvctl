@@ -711,23 +711,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "k8s-srvcon"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "env_logger",
- "futures",
- "k8s-openapi",
- "kube",
- "kube-derive",
- "tokio",
- "trust-dns-client",
- "trust-dns-resolver",
- "url",
-]
-
-[[package]]
 name = "kernel32-sys"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1499,6 +1482,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "srvctl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "env_logger",
+ "futures",
+ "k8s-openapi",
+ "kube",
+ "kube-derive",
+ "log",
+ "serde",
+ "serde_yaml",
+ "tokio",
+ "toml",
+ "trust-dns-client",
+ "trust-dns-resolver",
+ "url",
+]
+
+[[package]]
 name = "standback"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1762,6 +1766,15 @@ dependencies = [
  "log",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "toml"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffc92d160b1eef40665be3a05630d003936a3bc7da7421277846c2613e92c71a"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

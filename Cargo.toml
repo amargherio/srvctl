@@ -1,5 +1,5 @@
 [package]
-name = "k8s-srvcon"
+name = "srvctl"
 version = "0.1.0"
 authors = ["Adam Margherio <margherio.adam@gmail.com>"]
 edition = "2018"
@@ -14,6 +14,10 @@ futures = "0.3"
 kube = "0.38"
 kube-derive = "0.38"
 k8s-openapi = { version = "0.9", default-features = false , features = ["v1_17"] }
+log = "0.4"
+serde = "1.0"
+serde_yaml = "0.8"
+toml = "0.5"
 tokio = { version = "0.2", features = ["full"] }
 trust-dns-client = "0.19"
 trust-dns-resolver = "0.19"

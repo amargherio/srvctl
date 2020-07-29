@@ -2,6 +2,7 @@ use trust_dns_resolver::config::*;
 use trust_dns_resolver::Resolver;
 use url::Url;
 
+use std::fmt;
 use std::fmt::Display;
 use std::net::*;
 
@@ -30,5 +31,6 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<()> {
     let resolver = Resolver::from_system_conf().unwrap();
     let res = resolver.srv_lookup(dn)?;
 
+    println!("!!! SRV RECORD RESOLUTION: {:#?}", res);
     Ok(())
 }

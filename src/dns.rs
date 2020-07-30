@@ -35,7 +35,7 @@ impl Display for SrvResult {
 ///
 /// Based on the implementation of trust-dns, it's recommended to pass in a closing
 /// dot after the domain (www.example.com.)
-pub async fn resolve_srv(dn: &str) -> anyhow::Result<()> {
+pub async fn resolve_srv(dn: &str) -> anyhow::Result<Vec<SrvResult>> {
     // input validation
     // let _val = Url::parse(&dn).unwrap();
     debug!("Beginning SRV resolution for hostname {}", dn);
@@ -66,21 +66,31 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<()> {
 
     update_ip_addresses_for_results(&srvres_vec, &resolver);
 
-    Ok(())
+    Ok(srvres_vec)
 }
 
+/// Private function called from within the srvctl::dns::resolve_srv function
+/// to assist with resolving the A/AAAA records returned down to actual
+/// IP addresses.
+// TODO: Handle IPv6 gracefully here as well
 fn update_ip_addresses_for_results(srv_vec: &Vec<SrvResult>, resolver: &TokioAsyncResolver) {
     for rec in srv_vec.iter_mut() {
         debug!("Performing IPv4 resolution for hostname {}", rec.hostname);
         async {
-            if let ipv4_res = resolver.lookup_ip(rec.hostname).await {
+            if let ipv4_res = resolver.ipv4_lookup(rec.hostname).await {
                 match ipv4_res.iter().count() {
                     0 => {
                         warn!("No IP addresses resolved for hostname {}", rec.hostname);
                     }
                     _ => {
-                        // iterate over the returned LookupIps and add them to the IP vector
-                        // for the SrvResult
+                        rec.ipv4_addr = Some(vec![]); // we now have IPs so let's None to Some this
+                                                      // iterate over the returned LookupIps and add them to the IP vector
+                                                      // for the SrvResult
+                        ipv4_res.iter().for_each(|ip| {
+                            ip.iter().for_each(|rdata| {
+                                rec.ipv4_addr.unwrap().push(rdata.clone());
+                            });
+                        })
                     }
                 }
             }

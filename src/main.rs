@@ -1,5 +1,5 @@
 use anyhow::anyhow;
-use clap::{App, Arg, ArgMatches, Clap};
+use clap::{App, Arg, ArgMatches};
 use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 

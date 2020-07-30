@@ -1,4 +1,4 @@
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::{lookup_ip::LookupIp, TokioAsyncResolver};
 use url::Url;
@@ -13,7 +13,7 @@ pub struct SrvResult {
     priority: u16,
     weight: u16,
     hostname: String,
-    ipv4_addr: Ipv4Addr,
+    ipv4_addr: Option<Vec<Ipv4Addr>>,
 }
 
 impl Display for SrvResult {
@@ -46,6 +46,9 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<()> {
 
     trace!("SRV record resolution results: {:#?}", res);
 
+    // KLUDGE: This should be cleaned up ASAP to better support Ipv6Addr as well as Ipv4Addr
+    // and to better utilize the resolution offered by trust-dns-resolver instead
+    // of a multi-call ball of yarn that's harder to understand
     info!("Beginning SRV result processing to get IPv4 addresses");
     res.iter().for_each(|srv| {
         trace!("!!! SRV RDATA: {:#?}", srv);
@@ -54,16 +57,33 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<()> {
             priority: srv.priority(),
             weight: srv.weight(),
             hostname: srv.target().to_utf8(),
-            ipv4_addr: Ipv4Addr::new(0, 0, 0, 0),
+            ipv4_addr: None,
         };
         debug!("New SrvResult struct from SRV RDATA: {}", srv_res);
 
         srvres_vec.push(srv_res);
     });
 
-    update_ip_addresses_for_results(&srvres_vec);
+    update_ip_addresses_for_results(&srvres_vec, &resolver);
 
     Ok(())
 }
 
-fn update_ip_addresses_for_results(srv_vec: &Vec<SrvResult>) {}
+fn update_ip_addresses_for_results(srv_vec: &Vec<SrvResult>, resolver: &TokioAsyncResolver) {
+    for rec in srv_vec.iter_mut() {
+        debug!("Performing IPv4 resolution for hostname {}", rec.hostname);
+        async {
+            if let ipv4_res = resolver.lookup_ip(rec.hostname).await {
+                match ipv4_res.iter().count() {
+                    0 => {
+                        warn!("No IP addresses resolved for hostname {}", rec.hostname);
+                    }
+                    _ => {
+                        // iterate over the returned LookupIps and add them to the IP vector
+                        // for the SrvResult
+                    }
+                }
+            }
+        };
+    }
+}

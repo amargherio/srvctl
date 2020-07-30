@@ -32,30 +32,39 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
         .about("Runs a controller that manages an Endpoint or EndpointSlice representing an SRV DNS record in Kubernetes")
         .arg(
             Arg::new("config")
+                .long("config-file")
+                .short('c')
                 .value_name("FILE")
                 .about("A config file used by the controller in either TOML or YAML format")
                 .takes_value(true)
         )
         .arg(
-            Arg::new("loglevel")
+            Arg::with_name("verbosity")
+                .long("log-level")
                 .short('v')
-                .about("Log level. One of trace, debug, info, warn, error, or up to 3 consecutive flags '-vv'. Can be overwritten via RUST_LOG env var")
+                .about("Log level. One of trace, debug, info, warn, error. Can be overwritten via RUST_LOG env var")
+                .default_value("info")
+                .takes_value(true)
         )
         .get_matches();
 
-    let _ = resolve_srv("_mongodb._tcp.cv-eas-us-qa-eastus2-mo.nhtn2.azure.mongodb.net");
-
     // configure logging appropriately
-    if arg_matches.is_present("loglevel") {
-        log_level = arg_matches.value_of("loglevel").unwrap();
+    if arg_matches.is_present("verbosity") {
+        log_level = arg_matches.value_of("verbosity").unwrap();
     }
-    std::env::set_var("RUST_LOG", &log_level);
+
+    if let Err(_) = std::env::var("RUST_LOG") {
+        std::env::set_var("RUST_LOG", &log_level);
+    }
+
     std::env::set_var("RUST_LOG_STYLE", "never");
     env_logger::init();
 
     if log_level.eq("debug") || log_level.eq("trace") {
         debug!("Debug-level logging enabled")
     }
+
+    let _ = resolve_srv("_mongodb._tcp.cv-eas-us-qa-eastus2-mo.nhtn2.azure.mongodb.net").await?;
 
     // first thing's first - we parse the config file supplied
     if arg_matches.is_present("config") {

@@ -1,3 +1,5 @@
+use futures::executor::block_on;
+use futures::Future;
 use log::{debug, info, trace, warn};
 use trust_dns_resolver::config::*;
 use trust_dns_resolver::{lookup_ip::LookupIp, TokioAsyncResolver};
@@ -20,7 +22,7 @@ impl Display for SrvResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "&SrvResult {{ port: {}, priority: {}, weight: {}, hostname: {}, ipv4_addr: {} }}",
+            "&SrvResult {{ port: {}, priority: {}, weight: {}, hostname: {}, ipv4_addr: {:#?} }}",
             self.port, self.priority, self.weight, self.hostname, self.ipv4_addr
         )
     }
@@ -64,8 +66,55 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<Vec<SrvResult>> {
         srvres_vec.push(srv_res);
     });
 
-    update_ip_addresses_for_results(&srvres_vec, &resolver);
+    // TODO: extract this into its own function for modularity
+    for rec in srvres_vec.iter_mut() {
+        debug!("Performing IPv4 resolution for hostname {}", rec.hostname);
+        trace!("Allocating a new vector for building out the new Ipv4Addr SrvResult vector");
+        let mut ipv4_vec: Vec<Ipv4Addr> = vec![];
 
+        // this is required to be an async block due to futures being returned by the DNS lookup
+        // calls.
+        block_on(async {
+            if let ipv4_res = resolver.ipv4_lookup(rec.hostname.clone()).await {
+                debug!(
+                    "DNS resolution was successful for the hosdtname {}",
+                    rec.hostname
+                );
+                match ipv4_res.iter().count() {
+                    0 => {
+                        debug!(
+                            "No results were found for the hostname supplied: {}",
+                            rec.hostname
+                        );
+                        warn!("No IP addresses resolved for hostname {}", rec.hostname);
+                    }
+                    _ => {
+                        // iterate over the returned LookupIps and add them to the IP vector
+                        // for the SrvResult
+                        debug!("Iterating over the vector of IPs returned and generating the Ipv4Addr vector");
+                        ipv4_res.iter().for_each(|ip| {
+                            trace!("Iterating over the Ipv4Lookup {:#?}", ip);
+                            ip.iter().for_each(|rdata| {
+                                trace!(
+                                    "Adding following RDATA to the temporary IPv4 vector: {:#?}",
+                                    rdata
+                                );
+                                ipv4_vec.push(rdata.clone());
+                            });
+                        })
+                    }
+                }
+            }
+            debug!(
+                "Updating SrvResult for hostname {} with a vector of {} Ipv4Addr elements",
+                rec.hostname,
+                ipv4_vec.len()
+            );
+            rec.ipv4_addr = Some(ipv4_vec.clone());
+        });
+    }
+
+    trace!("The final SrvResult vector returned is: {:#?}", srvres_vec);
     Ok(srvres_vec)
 }
 
@@ -73,27 +122,54 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<Vec<SrvResult>> {
 /// to assist with resolving the A/AAAA records returned down to actual
 /// IP addresses.
 // TODO: Handle IPv6 gracefully here as well
-fn update_ip_addresses_for_results(srv_vec: &Vec<SrvResult>, resolver: &TokioAsyncResolver) {
+async fn update_ip_addresses_for_results(
+    srv_vec: &mut Vec<SrvResult>,
+    resolver: &TokioAsyncResolver,
+) {
     for rec in srv_vec.iter_mut() {
         debug!("Performing IPv4 resolution for hostname {}", rec.hostname);
+        trace!("Allocating a new vector for building out the new Ipv4Addr SrvResult vector");
+        let mut ipv4_vec: Vec<Ipv4Addr> = vec![];
+
+        // this is required to be an async block due to futures being returned by the DNS lookup
+        // calls.
         async {
-            if let ipv4_res = resolver.ipv4_lookup(rec.hostname).await {
+            if let ipv4_res = resolver.ipv4_lookup(rec.hostname.clone()).await {
+                debug!(
+                    "DNS resolution was successful for the hosdtname {}",
+                    rec.hostname
+                );
                 match ipv4_res.iter().count() {
                     0 => {
+                        debug!(
+                            "No results were found for the hostname supplied: {}",
+                            rec.hostname
+                        );
                         warn!("No IP addresses resolved for hostname {}", rec.hostname);
                     }
                     _ => {
-                        rec.ipv4_addr = Some(vec![]); // we now have IPs so let's None to Some this
-                                                      // iterate over the returned LookupIps and add them to the IP vector
-                                                      // for the SrvResult
+                        // iterate over the returned LookupIps and add them to the IP vector
+                        // for the SrvResult
+                        debug!("Iterating over the vector of IPs returned and generating the Ipv4Addr vector");
                         ipv4_res.iter().for_each(|ip| {
+                            trace!("Iterating over the Ipv4Lookup {:#?}", ip);
                             ip.iter().for_each(|rdata| {
-                                rec.ipv4_addr.unwrap().push(rdata.clone());
+                                trace!(
+                                    "Adding following RDATA to the temporary IPv4 vector: {:#?}",
+                                    rdata
+                                );
+                                ipv4_vec.push(rdata.clone());
                             });
                         })
                     }
                 }
             }
+            debug!(
+                "Updating SrvResult for hostname {} with a vector of {} Ipv4Addr elements",
+                rec.hostname,
+                ipv4_vec.len()
+            );
+            rec.ipv4_addr = Some(ipv4_vec.clone());
         };
     }
 }

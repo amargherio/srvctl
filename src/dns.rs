@@ -10,7 +10,15 @@ use std::fmt::Display;
 use std::net::*;
 
 #[derive(Debug)]
+pub struct SrvPort {
+    port: u16,
+    service: String,
+    protocol: String,
+}
+
+#[derive(Debug)]
 pub struct SrvResult {
+    srv_port: SrvPort,
     port: u16,
     priority: u16,
     weight: u16,
@@ -55,6 +63,11 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<Vec<SrvResult>> {
     res.iter().for_each(|srv| {
         trace!("!!! SRV RDATA: {:#?}", srv);
         let srv_res = SrvResult {
+            srv_port: SrvPort {
+                port: srv.port(),
+                protocol: String::from("tcp"),
+                service: String::from("mongo"),
+            },
             port: srv.port(),
             priority: srv.priority(),
             weight: srv.weight(),

@@ -1,9 +1,18 @@
 use anyhow::anyhow;
-use clap::{App, Arg, ArgMatches};
+use clap::{App, Arg};
+use k8s_openapi::{
+    api::core::v1::{Endpoints, Service},
+    api::discovery::v1beta1::EndpointSlice,
+};
+use kube::{
+    api::{DeleteParams, ListParams, Meta, PatchParams, PatchStrategy, PostParams},
+    Api, Client,
+};
 use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
+use serde_json::json;
 
-use srvctl::dns::resolve_srv;
+use srvctl::dns::{resolve_srv};
 
 use std::fmt;
 use std::fs::File;
@@ -13,8 +22,7 @@ use std::path::Path;
 #[derive(Debug, Deserialize)]
 struct ControllerConfig {
     domains: Vec<String>,
-    #[serde(alias = "createService")]
-    create_service: bool,
+    namespace: String,
 }
 
 impl std::fmt::Display for ControllerConfig {
@@ -23,9 +31,18 @@ impl std::fmt::Display for ControllerConfig {
     }
 }
 
+impl ControllerConfig {
+    fn empty() -> Self {
+        ControllerConfig {
+            domains: vec![],
+            namespace: String::new(),
+        }
+    }
+}
+
 #[tokio::main]
-async fn main() -> anyhow::Result<(), anyhow::Error> {
-    let loaded_config: ControllerConfig;
+async fn main() -> anyhow::Result<()> {
+    let mut loaded_config: ControllerConfig = ControllerConfig::empty();
     let mut log_level: &str = "info";
 
     let arg_matches = App::new("srvctl")
@@ -71,15 +88,41 @@ async fn main() -> anyhow::Result<(), anyhow::Error> {
         if let Some(conf) = arg_matches.value_of_os("config") {
             loaded_config = parse_load_config(&conf.to_str().unwrap()).unwrap();
         }
+    } else {
+        error!(
+            "No configuration file arg has been supplied - can't proceed so exiting with an error"
+        );
     }
 
-    // loop {
-    // info!("Beginning domain resolution for configured domains");
-    // for dom in &loaded_config.domains {
-    // let res = resolve_srv(dom.as_str()).await?;
-    // }
-    // }
-    Ok(())
+    let client = Client::try_default().await?;
+    loop {
+        info!("Beginning domain resolution for configured domains");
+        for dom in &loaded_config.domains {
+            debug!("Generating SrvResult vector for hostname {}", dom);
+            let res = resolve_srv(dom.as_str()).await?;
+
+            if res.len() < 1 {
+                warn!("No DNS results returned for hostname `{}`", dom);
+                continue;
+            }
+            let service: Api<Service> = Api::namespaced(client.clone(), &loaded_config.namespace);
+            let endpoint: Api<Endpoints> =
+                Api::namespaced(client.clone(), &loaded_config.namespace);
+
+            // TODO we should only need to create this for clusters that are >= 1.17
+            let endpoint_slice: Api<EndpointSlice> =
+                Api::namespaced(client.clone(), &loaded_config.namespace);
+
+            res.iter().for_each(|rec| {
+                // inside this guy, we first CRUD against the service, first checking
+                // and then either creating or updating as needed
+
+                // depending on kube version, use either an endpoint or endpoint slice.
+                //
+                // the EndpointSlice can be disabled via configmap flag
+            });
+        }
+    }
 }
 
 /// Handles the loading and parsing of the config file supplied as a CLI arg.

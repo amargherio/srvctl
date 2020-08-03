@@ -1,8 +1,6 @@
 use futures::executor::block_on;
-use futures::Future;
 use log::{debug, info, trace, warn};
-use trust_dns_resolver::config::*;
-use trust_dns_resolver::{lookup_ip::LookupIp, TokioAsyncResolver};
+use trust_dns_resolver::{TokioAsyncResolver};
 use url::Url;
 
 use std::fmt;
@@ -11,19 +9,19 @@ use std::net::*;
 
 #[derive(Debug)]
 pub struct SrvPort {
-    port: u16,
-    service: String,
-    protocol: String,
+    pub port: u16,
+    pub service: String,
+    pub protocol: String,
 }
 
 #[derive(Debug)]
 pub struct SrvResult {
-    srv_port: SrvPort,
-    port: u16,
-    priority: u16,
-    weight: u16,
-    hostname: String,
-    ipv4_addr: Option<Vec<Ipv4Addr>>,
+    pub srv_port: SrvPort,
+    pub port: u16,
+    pub priority: u16,
+    pub weight: u16,
+    pub hostname: String,
+    pub ipv4_addr: Option<Vec<Ipv4Addr>>,
 }
 
 impl Display for SrvResult {

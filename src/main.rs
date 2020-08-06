@@ -2,7 +2,8 @@ use anyhow::anyhow;
 use clap::{App, Arg};
 use k8s_openapi::{
     api::core::v1::{Endpoints, Service},
-    api::discovery::v1beta1::EndpointSlice,
+    api::discovery::v1beta1::{Endpoint, EndpointPort, EndpointSlice},
+    apimachinery::pkg::apis::meta::v1::ObjectMeta,
 };
 use kube::{
     api::{DeleteParams, ListParams, Meta, PatchParams, PatchStrategy, PostParams},
@@ -12,16 +13,26 @@ use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 use serde_json::json;
 
-use srvctl::dns::{resolve_srv};
+use srvctl::dns::resolve_srv;
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
+struct SRVDomain {
+    hostname: String,
+    #[serde(alias = "serviceName")]
+    service_name: String,
+    #[serde(alias = "sliceType")]
+    slice_type: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 struct ControllerConfig {
-    domains: Vec<String>,
+    domains: Vec<SRVDomain>,
     namespace: String,
 }
 
@@ -81,7 +92,9 @@ async fn main() -> anyhow::Result<()> {
         debug!("Debug-level logging enabled")
     }
 
-    let _ = resolve_srv("_mongodb._tcp.cv-eas-us-qa-eastus2-mo.nhtn2.azure.mongodb.net").await?;
+    let _ = resolve_srv("_mongodb._tcp.cv-eas-us-qa-eastus2-mo.nhtn2.azure.mongodb.net")
+        .await
+        .unwrap();
 
     // first thing's first - we parse the config file supplied
     if arg_matches.is_present("config") {
@@ -98,34 +111,100 @@ async fn main() -> anyhow::Result<()> {
     loop {
         info!("Beginning domain resolution for configured domains");
         for dom in &loaded_config.domains {
-            debug!("Generating SrvResult vector for hostname {}", dom);
-            let res = resolve_srv(dom.as_str()).await?;
+            debug!("Generating SrvResult vector for hostname {:#?}", dom);
+            let res = resolve_srv(dom.hostname.as_str()).await?;
+            let mut srv_endpoints: Vec<Endpoint>;
+            let mut srv_port: EndpointPort;
 
-            if res.len() < 1 {
-                warn!("No DNS results returned for hostname `{}`", dom);
-                continue;
+            if let Some(recs) = res.srv_records {
+                srv_port = EndpointPort {
+                    protocol: res.protocol,
+                    name: res.service,
+                    port: Some(recs.first().unwrap().port as i32),
+                    app_protocol: None,
+                };
+
+                match dom.slice_type.as_str() {
+                    "ipv4" | "fqdn" => {
+                        srv_endpoints = vec![];
+                        recs.iter().for_each(|rec| {
+                            let mut ips: Vec<String> = vec![];
+                            if let Some(ipaddrs) = &rec.ipv4_addr {
+                                for ip in ipaddrs {
+                                    ips.push(ip.to_string());
+                                }
+                            }
+                            let e = k8s_openapi::api::discovery::v1beta1::Endpoint {
+                                addresses: ips,
+                                conditions: None,
+                                hostname: Some(rec.hostname.clone()),
+                                topology: None,
+                                target_ref: None,
+                            };
+                            srv_endpoints.push(e);
+                        });
+                    }
+                    "ipv6" => unimplemented!(
+                        "This configuration (IPv6 support) is currently unimplemented."
+                    ),
+                    _ => {}
+                }
+            } else {
+                warn!("No resolved records returned for {}, nothing to create in-cluster representation of.", dom.hostname);
+                debug!("SrvResult from resolve_srv: {:#?}", res);
+                break;
             }
-            let service: Api<Service> = Api::namespaced(client.clone(), &loaded_config.namespace);
+
+            // generate a BTreeMap with initial labels
+            let mut labels: BTreeMap<String, String> = BTreeMap::new();
+            labels.insert(
+                String::from("app.kubernetes.io/service-name"),
+                dom.clone().service_name,
+            );
+            labels.insert(String::from("srvctl.tsp.tc/srv-hostname"), res.srv_hostname);
+            labels.insert(
+                String::from("app.kubernetes.io/managed-by"),
+                String::from("srvctl"),
+            );
+
+            let service: Api<Service> =
+                Api::namespaced(client.clone(), &loaded_config.clone().namespace);
+
             let endpoint: Api<Endpoints> =
-                Api::namespaced(client.clone(), &loaded_config.namespace);
+                Api::namespaced(client.clone(), &loaded_config.clone().namespace);
 
             // TODO we should only need to create this for clusters that are >= 1.17
             let endpoint_slice: Api<EndpointSlice> =
-                Api::namespaced(client.clone(), &loaded_config.namespace);
+                Api::namespaced(client.clone(), &loaded_config.clone().namespace);
 
-            res.iter().for_each(|rec| {
-                // inside this guy, we first CRUD against the service, first checking
-                // and then either creating or updating as needed
-
-                // depending on kube version, use either an endpoint or endpoint slice.
-                //
-                // the EndpointSlice can be disabled via configmap flag
-            });
+            let slice_obj = EndpointSlice {
+                address_type: dom.slice_type.clone(),
+                endpoints: srv_endpoints,
+                ports: Some(vec![srv_port]),
+                metadata: ObjectMeta {
+                    name: Some(dom.service_name.clone()),
+                    namespace: Some(loaded_config.clone().namespace),
+                    annotations: None,
+                    cluster_name: None,
+                    creation_timestamp: None,
+                    deletion_grace_period_seconds: None,
+                    deletion_timestamp: None,
+                    finalizers: None,
+                    generate_name: None,
+                    generation: None,
+                    managed_fields: None,
+                    owner_references: None, // TODO: generate correct owner data
+                    resource_version: None,
+                    self_link: None,
+                    uid: None,
+                    labels: Some(labels),
+                },
+            };
         }
     }
 }
 
-/// Handles the loading and parsing of the config file supplied as a CLI arg.
+/// Handles the l!({})ding and parsing of the config file supplied as a CLI arg.
 ///
 /// In order, it determines if the file path exists, extracts the extension,
 /// and (for a supported file extension) attemptes to parse the file.

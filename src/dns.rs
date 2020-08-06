@@ -60,7 +60,7 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<SrvResult> {
     let resolver = TokioAsyncResolver::tokio_from_system_conf().await?;
     let res: trust_dns_resolver::lookup::SrvLookup = resolver.srv_lookup(dn).await?;
     let mut srv_recs: Vec<SrvRecord> = vec![];
-    let srv_res = SrvResult {
+    let mut srv_res = SrvResult {
         protocol: parse_protocol(dn),
         service: parse_service(dn),
         srv_hostname: String::from(dn),
@@ -88,8 +88,10 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<SrvResult> {
 
     // TODO: extract this into its own function for modularity
     for rec in srv_recs.iter_mut() {
-        update_ip_addresses_for_record(rec, &resolver);
+        update_ip_addresses_for_record(rec, &resolver).await;
     }
+
+    srv_res.srv_records = Some(srv_recs);
 
     trace!("The final SrvResult returned is: {:#?}", srv_res);
     Ok(srv_res)
@@ -106,35 +108,29 @@ async fn update_ip_addresses_for_record(rec: &mut SrvRecord, resolver: &TokioAsy
 
     // this is required to be an async block due to futures being returned by the DNS lookup
     // calls.
-    async {
-        if let ipv4_res = resolver.ipv4_lookup(rec.hostname.clone()).await {
-            debug!(
-                "DNS resolution was successful for the hosdtname {}",
-                rec.hostname
-            );
-            match ipv4_res.iter().count() {
-                0 => {
-                    debug!(
-                        "No results were found for the hostname supplied: {}",
-                        rec.hostname
-                    );
-                    warn!("No IP addresses resolved for hostname {}", rec.hostname);
-                }
-                _ => {
-                    // iterate over the returned LookupIps and add them to the IP vector
-                    // for the SrvResult
-                    debug!("Iterating over the vector of IPs returned and generating the Ipv4Addr vector");
-                    ipv4_res.iter().for_each(|ip| {
-                        trace!("Iterating over the Ipv4Lookup {:#?}", ip);
-                        ip.iter().for_each(|rdata| {
-                            trace!(
-                                "Adding following RDATA to the temporary IPv4 vector: {:#?}",
-                                rdata
-                            );
-                            ipv4_vec.push(rdata.clone());
-                        });
-                    })
-                }
+    if let ipv4_res = resolver.ipv4_lookup(rec.hostname.clone()).await.unwrap() {
+        debug!(
+            "DNS resolution was successful for the hosdtname {}",
+            rec.hostname
+        );
+        match ipv4_res.iter().count() {
+            0 => {
+                debug!(
+                    "No results were found for the hostname supplied: {}",
+                    rec.hostname
+                );
+                warn!("No IP addresses resolved for hostname {}", rec.hostname);
+            }
+            _ => {
+                // iterate over the returned LookupIps and add them to the IP vector
+                // for the SrvResult
+                debug!(
+                    "Iterating over the vector of IPs returned and generating the Ipv4Addr vector"
+                );
+                ipv4_res.iter().for_each(|ip| {
+                    trace!("Iterating over the Ipv4Lookup RDATA: {:#?}", ip);
+                    ipv4_vec.push(ip.clone());
+                });
             }
         }
         debug!(

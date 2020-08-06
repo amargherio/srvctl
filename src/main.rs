@@ -204,7 +204,7 @@ async fn main() -> anyhow::Result<()> {
     }
 }
 
-/// Handles the l!({})ding and parsing of the config file supplied as a CLI arg.
+/// Handles the loading and parsing of the config file supplied as a CLI arg.
 ///
 /// In order, it determines if the file path exists, extracts the extension,
 /// and (for a supported file extension) attemptes to parse the file.

@@ -14,6 +14,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 use srvctl::dns::resolve_srv;
+use srvctl::k8s::endpoints;
+use srvctl::k8s::services;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -34,6 +36,8 @@ struct SRVDomain {
 struct ControllerConfig {
     domains: Vec<SRVDomain>,
     namespace: String,
+    #[serde(alias = "clusterVersion")]
+    cluster_version: String,
 }
 
 impl std::fmt::Display for ControllerConfig {
@@ -47,6 +51,7 @@ impl ControllerConfig {
         ControllerConfig {
             domains: vec![],
             namespace: String::new(),
+            cluster_version: String::new(),
         }
     }
 }
@@ -55,6 +60,7 @@ impl ControllerConfig {
 async fn main() -> anyhow::Result<()> {
     let mut loaded_config: ControllerConfig = ControllerConfig::empty();
     let mut log_level: &str = "info";
+    let mut endpoint_slices_enabled = false; // setting a default here just in case
 
     let arg_matches = App::new("srvctl")
         .about("Runs a controller that manages an Endpoint or EndpointSlice representing an SRV DNS record in Kubernetes")
@@ -72,6 +78,16 @@ async fn main() -> anyhow::Result<()> {
                 .short('v')
                 .about("Log level. One of trace, debug, info, warn, error. Can be overwritten via RUST_LOG env var")
                 .default_value("info")
+                .takes_value(true)
+        )
+        .arg(
+            Arg::with_name("endpoint-slice")
+                .long("enable-endpoint-slices")
+                .about("Sets a preference for EndpointSlices when creating services in-cluster. Boolean with a default of 'false'.")
+                .about_long("Sets a preference for EndpointSlices instead of Endpoints when creating service representations in-cluster.
+
+Accepts a boolean value and defaults to false. Note that EndpointSlices went into beta with 1.17, so your cluster may not have them enabled.")
+                .default_value(false)
                 .takes_value(true)
         )
         .get_matches();
@@ -107,47 +123,42 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    endpoint_slices_enabled = arg_matches.value_of("endpoint-slices").unwrap().eq("true");
+
     let client = Client::try_default().await?;
     loop {
         info!("Beginning domain resolution for configured domains");
+
         for dom in &loaded_config.domains {
             debug!("Generating SrvResult vector for hostname {:#?}", dom);
+
             let res = resolve_srv(dom.hostname.as_str()).await?;
             let mut srv_endpoints: Vec<Endpoint>;
             let mut srv_port: EndpointPort;
 
             if let Some(recs) = res.srv_records {
-                srv_port = EndpointPort {
-                    protocol: res.protocol,
-                    name: res.service,
-                    port: Some(recs.first().unwrap().port as i32),
-                    app_protocol: None,
-                };
+                // generate a BTreeMap with initial labels
+                // TODO: Move this into a more configuration-friendly method.
+                let mut labels: BTreeMap<String, String> = BTreeMap::new();
+                labels.insert(
+                    String::from("app.kubernetes.io/service-name"),
+                    dom.clone().service_name,
+                );
+                labels.insert(String::from("srvctl.tsp.tc/srv-hostname"), res.srv_hostname);
+                labels.insert(
+                    String::from("app.kubernetes.io/managed-by"),
+                    String::from("srvctl"),
+                );
 
-                match dom.slice_type.as_str() {
-                    "ipv4" | "fqdn" => {
-                        srv_endpoints = vec![];
-                        recs.iter().for_each(|rec| {
-                            let mut ips: Vec<String> = vec![];
-                            if let Some(ipaddrs) = &rec.ipv4_addr {
-                                for ip in ipaddrs {
-                                    ips.push(ip.to_string());
-                                }
-                            }
-                            let e = k8s_openapi::api::discovery::v1beta1::Endpoint {
-                                addresses: ips,
-                                conditions: None,
-                                hostname: Some(rec.hostname.clone()),
-                                topology: None,
-                                target_ref: None,
-                            };
-                            srv_endpoints.push(e);
-                        });
-                    }
-                    "ipv6" => unimplemented!(
-                        "This configuration (IPv6 support) is currently unimplemented."
-                    ),
-                    _ => {}
+                if endpoint_slices_enabled {
+                    endpoints::gen_endpoint_slices(
+                        &client,
+                        &res,
+                        dom.slice_type.as_str(),
+                        &loaded_config.namespace.as_str(),
+                    );
+                } else {
+                    endpoints::gen_endpoints(&client, &res);
                 }
             } else {
                 warn!("No resolved records returned for {}, nothing to create in-cluster representation of.", dom.hostname);
@@ -155,20 +166,16 @@ async fn main() -> anyhow::Result<()> {
                 break;
             }
 
-            // generate a BTreeMap with initial labels
-            let mut labels: BTreeMap<String, String> = BTreeMap::new();
-            labels.insert(
-                String::from("app.kubernetes.io/service-name"),
-                dom.clone().service_name,
-            );
-            labels.insert(String::from("srvctl.tsp.tc/srv-hostname"), res.srv_hostname);
-            labels.insert(
-                String::from("app.kubernetes.io/managed-by"),
-                String::from("srvctl"),
-            );
-
             let service: Api<Service> =
                 Api::namespaced(client.clone(), &loaded_config.clone().namespace);
+
+            if loaded_config.cluster_version.eq("1.17") {
+                endpoint_api: Api<EndpointSlice> =
+                    Api::namespaced(client.clone(), &loaded_config.clone().namespace);
+            } else {
+                endpoint_api: Api<Endpoints> =
+                    Api::namespaced(client.clone(), &loaded_config.clone().namespace);
+            }
 
             let endpoint: Api<Endpoints> =
                 Api::namespaced(client.clone(), &loaded_config.clone().namespace);
@@ -200,6 +207,9 @@ async fn main() -> anyhow::Result<()> {
                     labels: Some(labels),
                 },
             };
+
+            // create the endpoint or endpointslice
+            // TODO:: Clean this up with support for endpoints _or_ endpointslices
         }
     }
 }

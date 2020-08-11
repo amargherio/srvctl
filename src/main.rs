@@ -16,21 +16,13 @@ use serde_json::json;
 use srvctl::dns::resolve_srv;
 use srvctl::k8s::endpoints;
 use srvctl::k8s::services;
+use srvctl::SRVDomain;
 
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
-
-#[derive(Clone, Debug, Deserialize)]
-struct SRVDomain {
-    hostname: String,
-    #[serde(alias = "serviceName")]
-    service_name: String,
-    #[serde(alias = "sliceType")]
-    slice_type: String,
-}
 
 #[derive(Clone, Debug, Deserialize)]
 struct ControllerConfig {
@@ -154,7 +146,7 @@ Accepts a boolean value and defaults to false. Note that EndpointSlices went int
                     endpoints::gen_endpoint_slices(
                         &client,
                         &res,
-                        dom.slice_type.as_str(),
+                        &dom,
                         &loaded_config.namespace.as_str(),
                     );
                 } else {
@@ -169,18 +161,6 @@ Accepts a boolean value and defaults to false. Note that EndpointSlices went int
             let service: Api<Service> =
                 Api::namespaced(client.clone(), &loaded_config.clone().namespace);
 
-            if loaded_config.cluster_version.eq("1.17") {
-                endpoint_api: Api<EndpointSlice> =
-                    Api::namespaced(client.clone(), &loaded_config.clone().namespace);
-            } else {
-                endpoint_api: Api<Endpoints> =
-                    Api::namespaced(client.clone(), &loaded_config.clone().namespace);
-            }
-
-            let endpoint: Api<Endpoints> =
-                Api::namespaced(client.clone(), &loaded_config.clone().namespace);
-
-            // TODO we should only need to create this for clusters that are >= 1.17
             let endpoint_slice: Api<EndpointSlice> =
                 Api::namespaced(client.clone(), &loaded_config.clone().namespace);
 

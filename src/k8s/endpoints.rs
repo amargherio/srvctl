@@ -12,25 +12,31 @@ use serde::Deserialize;
 use serde_json::json;
 
 use super::super::dns;
+use super::super::SRVDomain;
 
 pub fn gen_endpoint_slices(
     client: &kube::Client,
     res: &dns::SrvResult,
-    slice_type: &str,
+    dom: &SRVDomain,
     namespace: &str,
 ) {
     let mut srv_port: EndpointPort;
     let mut srv_endpoints: Vec<Endpoint>;
 
     if let Some(recs) = &res.srv_records {
+        // KLUDGE we have to clone these (not ideal) to get around a missing Copy trait on
+        // the SrvResult object
+        let proto = res.protocol.clone();
+        let name = res.service.clone();
+
         let srv_port = EndpointPort {
-            protocol: res.protocol,
-            name: res.service,
+            protocol: proto,
+            name: name,
             port: Some(recs.first().unwrap().port as i32),
             app_protocol: None,
         };
 
-        match slice_type {
+        match dom.slice_type.as_str() {
             "ipv4" | "fqdn" => {
                 srv_endpoints = vec![];
 
@@ -52,6 +58,7 @@ pub fn gen_endpoint_slices(
                 });
             }
             "ipv6" => {
+                warn!("slice_type requested as IPv6 which is currently unsupported.");
                 unimplemented!("This configuration (IPv6 support) is currently unimplemented.")
             }
             _ => {}
@@ -59,6 +66,29 @@ pub fn gen_endpoint_slices(
     }
 
     let endpoint_api: Api<EndpointSlice> = Api::namespaced(client.clone(), namespace);
+    let endpoint_obj = EndpointSlice {
+        address_type: String::from(dom.slice_type),
+        endpoints: srv_endpoints,
+        ports: Some(vec![srv_port]),
+        metadata: ObjectMeta {
+            name: Some(dom.service_name),
+            namespace: Some(String::from(namespace)),
+            annotations: None,
+            cluster_name: None,
+            creation_timestamp: None,
+            deletion_grace_period_seconds: None,
+            deletion_timestamp: None,
+            finalizers: None,
+            generate_name: None,
+            generation: None,
+            managed_fields: None,
+            owner_references: None, // TODO: generate correct owner data
+            resource_version: None,
+            self_link: None,
+            uid: None,
+            labels: Some(labels),
+        },
+    };
 }
 
 pub fn gen_endpoints(client: &kube::Client, res: &dns::SrvResult) {}

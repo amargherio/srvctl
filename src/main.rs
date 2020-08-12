@@ -146,7 +146,7 @@ Accepts a boolean value and defaults to false. Note that EndpointSlices went int
                     endpoints::gen_endpoint_slices(
                         &client,
                         &res,
-                        &dom,
+                        dom.clone(),
                         &loaded_config.namespace.as_str(),
                     );
                 } else {

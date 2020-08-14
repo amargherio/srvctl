@@ -148,12 +148,13 @@ Accepts a boolean value and defaults to false. Note that EndpointSlices went int
                         &res,
                         dom.clone(),
                         &loaded_config.namespace.as_str(),
+                        &labels,
                     );
                 } else {
                     endpoints::gen_endpoints(&client, &res);
                 }
             } else {
-                warn!("No resolved records returned for {}, nothing to create in-cluster representation of.", dom.hostname);
+                warn!("No resolved records returned for {}, nothing to create an in-cluster representation of.", dom.hostname);
                 debug!("SrvResult from resolve_srv: {:#?}", res);
                 break;
             }

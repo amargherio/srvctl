@@ -10,7 +10,7 @@ pub(crate) fn gen_common_labels(
     service_name: &str,
     srv_hostname: &str,
 ) -> BTreeMap<String, String> {
-    let labels = BTreeMap::new();
+    let mut labels = BTreeMap::new();
 
     labels.insert(
         String::from("app.kubernetes.io/service-name"),

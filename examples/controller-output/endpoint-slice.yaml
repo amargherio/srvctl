@@ -1,0 +1,55 @@
+apiVersion: discovery.k8s.io/v1beta1
+kind: EndpointSlice
+metadata:
+  name: mongodb
+  namespace: infra
+  labels:
+    kubernetes.io/service-name: mongodb
+addressType: IPv4
+ports:
+  - name: mongodb
+    protocol: TCP
+    port: 27017
+endpoints:
+  - addresses:
+      - 20.49.2.102
+    conditions:
+      ready: true
+    hostname: cv-eas-us-qa-eastus2-mo-shard-00-00.nhtn2.azure.mongodb.net.
+  - addresses:
+      - 20.186.26.191
+    conditions:
+      ready: true
+    hostname: cv-eas-us-qa-eastus2-mo-shard-00-01.nhtn2.azure.mongodb.net.
+  - addresses:
+      - 20.186.114.121
+    conditions:
+      ready: true
+    hostname: cv-eas-us-qa-eastus2-mo-shard-00-02.nhtn2.azure.mongodb.net.
+---
+# OR the alternative of an FQDN endpoint slice
+apiVersion: discovery.k8s.io/v1beta1
+kind: EndpointSlice
+metadata:
+  name: mongodb
+  namespace: infra
+  labels:
+    kubernetes.io/service-name: mongodb
+addressType: FQDN
+ports:
+  - name: mongodb
+    protocol: TCP
+    port: 27017
+endpoints:
+  - addresses:
+      - cv-eas-us-qa-eastus2-mo-shard-00-00.nhtn2.azure.mongodb.net.
+    conditions:
+      ready: true
+  - addresses:
+      - cv-eas-us-qa-eastus2-mo-shard-00-01.nhtn2.azure.mongodb.net.
+    conditions:
+      ready: true
+  - addresses:
+      - cv-eas-us-qa-eastus2-mo-shard-00-02.nhtn2.azure.mongodb.net.
+    conditions:
+      ready: true

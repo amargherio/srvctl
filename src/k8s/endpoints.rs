@@ -24,7 +24,12 @@ pub async fn gen_endpoint_slices(
     namespace: &str,
     labels: &BTreeMap<String, String>,
 ) -> anyhow::Result<()> {
-    let mut srv_port: EndpointPort;
+    let mut srv_port: EndpointPort = EndpointPort {
+        app_protocol: None,
+        name: None,
+        port: None,
+        protocol: None,
+    };
     let mut srv_endpoints: Vec<Endpoint> = vec![];
 
     if let Some(recs) = &res.srv_records {
@@ -33,12 +38,9 @@ pub async fn gen_endpoint_slices(
         let proto = res.protocol.clone();
         let name = res.service.clone();
 
-        let srv_port = EndpointPort {
-            protocol: proto,
-            name: name,
-            port: Some(recs.first().unwrap().port as i32),
-            app_protocol: None,
-        };
+        srv_port.protocol = proto;
+        srv_port.name = name;
+        srv_port.port = Some(recs.first().unwrap().port as i32);
 
         match dom.slice_type.as_str() {
             "ipv4" | "fqdn" => {

@@ -76,10 +76,10 @@ async fn main() -> anyhow::Result<()> {
             Arg::with_name("endpoint-slice")
                 .long("enable-endpoint-slices")
                 .about("Sets a preference for EndpointSlices when creating services in-cluster. Boolean with a default of 'false'.")
-                .about_long("Sets a preference for EndpointSlices instead of Endpoints when creating service representations in-cluster.
-
-Accepts a boolean value and defaults to false. Note that EndpointSlices went into beta with 1.17, so your cluster may not have them enabled.")
-                .default_value(false)
+                //.about_long("Sets a preference for EndpointSlices instead of Endpoints when creating service representations in-cluster.
+                //
+//Accepts a boolean value and defaults to false. Note that EndpointSlices went into beta with 1.17, so your cluster may not have them enabled.")
+                .default_value("false")
                 .takes_value(true)
         )
         .get_matches();
@@ -128,7 +128,7 @@ Accepts a boolean value and defaults to false. Note that EndpointSlices went int
             let mut srv_endpoints: Vec<Endpoint>;
             let mut srv_port: EndpointPort;
 
-            if let Some(recs) = res.srv_records {
+            if let Some(ref recs) = res.srv_records {
                 // generate a BTreeMap with initial labels
                 // TODO: Move this into a more configuration-friendly method.
                 let mut labels: BTreeMap<String, String> = BTreeMap::new();
@@ -136,7 +136,10 @@ Accepts a boolean value and defaults to false. Note that EndpointSlices went int
                     String::from("app.kubernetes.io/service-name"),
                     dom.clone().service_name,
                 );
-                labels.insert(String::from("srvctl.tsp.tc/srv-hostname"), res.srv_hostname);
+                labels.insert(
+                    String::from("srvctl.tsp.tc/srv-hostname"),
+                    res.srv_hostname.clone(),
+                );
                 labels.insert(
                     String::from("app.kubernetes.io/managed-by"),
                     String::from("srvctl"),
@@ -159,35 +162,35 @@ Accepts a boolean value and defaults to false. Note that EndpointSlices went int
                 break;
             }
 
-            let service: Api<Service> =
-                Api::namespaced(client.clone(), &loaded_config.clone().namespace);
+            // let service: Api<Service> =
+            //     Api::namespaced(client.clone(), &loaded_config.clone().namespace);
 
-            let endpoint_slice: Api<EndpointSlice> =
-                Api::namespaced(client.clone(), &loaded_config.clone().namespace);
+            // let endpoint_slice: Api<EndpointSlice> =
+            //     Api::namespaced(client.clone(), &loaded_config.clone().namespace);
 
-            let slice_obj = EndpointSlice {
-                address_type: dom.slice_type.clone(),
-                endpoints: srv_endpoints,
-                ports: Some(vec![srv_port]),
-                metadata: ObjectMeta {
-                    name: Some(dom.service_name.clone()),
-                    namespace: Some(loaded_config.clone().namespace),
-                    annotations: None,
-                    cluster_name: None,
-                    creation_timestamp: None,
-                    deletion_grace_period_seconds: None,
-                    deletion_timestamp: None,
-                    finalizers: None,
-                    generate_name: None,
-                    generation: None,
-                    managed_fields: None,
-                    owner_references: None, // TODO: generate correct owner data
-                    resource_version: None,
-                    self_link: None,
-                    uid: None,
-                    labels: Some(labels),
-                },
-            };
+            // let slice_obj = EndpointSlice {
+            //     address_type: dom.slice_type.clone(),
+            //     endpoints: srv_endpoints,
+            //     ports: Some(vec![srv_port]),
+            //     metadata: ObjectMeta {
+            //         name: Some(dom.service_name.clone()),
+            //         namespace: Some(loaded_config.clone().namespace),
+            //         annotations: None,
+            //         cluster_name: None,
+            //         creation_timestamp: None,
+            //         deletion_grace_period_seconds: None,
+            //         deletion_timestamp: None,
+            //         finalizers: None,
+            //         generate_name: None,
+            //         generation: None,
+            //         managed_fields: None,
+            //         owner_references: None, // TODO: generate correct owner data
+            //         resource_version: None,
+            //         self_link: None,
+            //         uid: None,
+            //         labels: Some(labels),
+            //     },
+            // };
 
             // create the endpoint or endpointslice
             // TODO:: Clean this up with support for endpoints _or_ endpointslices

@@ -177,3 +177,40 @@ fn parse_protocol(dn: &str) -> Option<String> {
         None => return None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_protocol_with_correctly_formatted_domain() {
+        let dn = "_mongo._tcp.test.database.domain";
+        let res = parse_protocol(&dn);
+
+        assert_eq!(res, Some(String::from("tcp")));
+    }
+
+    #[test]
+    fn test_parse_protocol_with_malformed_domain() {
+        let dn = "www.google.com";
+        let res = parse_protocol(&dn);
+
+        assert_eq!(res, None);
+    }
+
+    #[test]
+    fn test_parse_service_with_correctly_formatted_domain() {
+        let dn = "_mongo._tcp.test.database.domain";
+        let res = parse_service(&dn);
+
+        assert_eq!(res, Some(String::from("mongo")));
+    }
+
+    #[test]
+    fn test_parse_service_with_malformed_domain() {
+        let dn = "www.google.com";
+        let res = parse_service(&dn);
+
+        assert_eq!(res, None);
+    }
+}

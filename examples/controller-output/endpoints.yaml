@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: mongodb
+  namespace: infra
+subsets:
+  - addresses:
+      - ip: 20.49.2.102
+      - ip: 20.186.26.191
+      - ip: 20.186.114.121
+    ports:
+      - name: mongodb
+        port: 27017
+        protocol: TCP

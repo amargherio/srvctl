@@ -19,3 +19,8 @@ pub struct SRVResolver {
     srv_record: &str,
     include_txt: bool,
 }
+
+#[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
+pub struct SRVResolverStatus {
+    // fields TBD
+}

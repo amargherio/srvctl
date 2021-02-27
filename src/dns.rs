@@ -57,7 +57,7 @@ pub async fn resolve_srv(dn: &str) -> anyhow::Result<SrvResult> {
     // let _val = Url::parse(&dn).unwrap();
     debug!("Beginning SRV resolution for hostname {}", dn);
 
-    let resolver = TokioAsyncResolver::tokio_from_system_conf().await?;
+    let resolver = TokioAsyncResolver::tokio_from_system_conf().expect("Cannot create DNS resolver");
     let res: trust_dns_resolver::lookup::SrvLookup = resolver.srv_lookup(dn).await?;
     let mut srv_recs: Vec<SrvRecord> = vec![];
     let mut srv_res = SrvResult {

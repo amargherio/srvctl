@@ -4,7 +4,7 @@ use k8s_openapi::{
     apimachinery::pkg::apis::meta::v1::ObjectMeta,
 };
 use kube::{
-    api::{DeleteParams, ListParams, Meta, PatchParams, PatchStrategy, PostParams},
+    api::{DeleteParams, ListParams, Meta, PatchParams, PostParams},
     Api, Client,
 };
 use log::{debug, error, info, trace, warn};

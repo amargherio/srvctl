@@ -1,12 +1,8 @@
 use anyhow::anyhow;
 use clap::{App, Arg};
-use k8s_openapi::{
-    api::core::v1::{Endpoints, Service},
-    api::discovery::v1beta1::{Endpoint, EndpointPort, EndpointSlice},
-    apimachinery::pkg::apis::meta::v1::ObjectMeta,
-};
+use k8s_openapi::{api::core::v1::{Endpoints, Service}, api::discovery::v1beta1::{Endpoint, EndpointPort, EndpointSlice}, apiextensions_apiserver::pkg::apis::apiextensions::v1beta1::CustomResourceDefinition, apimachinery::pkg::apis::meta::v1::ObjectMeta};
 use kube::{
-    api::{DeleteParams, ListParams, Meta, PatchParams, PatchStrategy, PostParams},
+    api::{DeleteParams, ListParams, Meta, PatchParams, PostParams},
     Api, Client,
 };
 use log::{debug, error, info, trace, warn};
@@ -100,6 +96,22 @@ async fn main() -> anyhow::Result<()> {
         debug!("Debug-level logging enabled")
     }
 
+    if arg_matches.is_present("config") {
+        if let Some(conf) = arg_matches.value_of_os("config") {
+            loaded_config = parse_load_config(&conf.to_str().unwrap())?;
+        }
+    } else {
+        error!(
+            "No configuration file arg has been supplied - can't proceed so exiting with an error"
+        );
+    }
+
+    // start controller impl
+    let client = Client::try_default().await?;
+    let crds: Api<CustomResourceDefinition> = Api::all(client.clone());
+
+
+    // !! OLD IMPL IGNORE
     let _ = resolve_srv("_mongodb._tcp.cv-eas-us-qa-eastus2-mo.nhtn2.azure.mongodb.net")
         .await
         .unwrap();

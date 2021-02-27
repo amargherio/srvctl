@@ -1,0 +1,15 @@
+apiVersion: srvresolver.amargher.io/v1
+kind: SRVResolver
+metadata:
+  name: mongodb-srv
+  namespace: kube-system
+spec:
+  includeTXT: true
+  srvRecord: _mongodb._tcp.cv-eas-us-qa-eastus2-mo.nhtn2.azure.mongodb.net
+---
+apiVersion: srvresolver.amargher.io/v1
+kind: SRVResolver
+metadata:
+  name: mongodb-srv-no-txt
+spec:
+  srvRecord: _mongodb._tcp.cv-eas-us-qa-eastus2-mo.nhtn2.azure.mongodb.net
